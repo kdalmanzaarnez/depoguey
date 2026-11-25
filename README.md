@@ -84,6 +84,33 @@ backend/.venv/bin/python backend/manage.py runserver
 
 De backend draait op http://127.0.0.1:8000.
 
+### 5. Demogebruikers
+
+Zet `DEMO_PASSWORD` in `.env` en draai:
+
+```bash
+backend/.venv/bin/python backend/manage.py seed_demo
+```
+
+| Gebruiker | Rol |
+| --- | --- |
+| `medewerker` | Medewerker |
+| `admin` | Admin |
+
+Beide loggen in met het wachtwoord uit `DEMO_PASSWORD`. Het commando mag vaker gedraaid worden; het zet de demogebruikers terug naar hun beginstand.
+
+## Tests
+
+```bash
+backend/.venv/bin/python backend/manage.py test
+```
+
+Django maakt hiervoor een aparte database `test_pixeldepot_wms`. Het script in `docker/mysql-init/` geeft de databasegebruiker daar rechten op, maar alleen bij een nieuwe, lege database. Bestond je database al voordat dit script er was, draai het dan één keer handmatig:
+
+```bash
+docker exec pixeldepot-db bash /docker-entrypoint-initdb.d/01-test-database.sh
+```
+
 ## Mappen
 
 | Map | Inhoud |
@@ -91,6 +118,7 @@ De backend draait op http://127.0.0.1:8000.
 | `backend/` | Django-project (`config/`) |
 | `frontend/` | React-app |
 | `docs/` | Projectplan, design, diagrammen, Scrum-verslagen |
+| `docker/` | Init-scripts voor de MySQL-container |
 
 ## Werkwijze met Git
 
