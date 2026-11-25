@@ -84,6 +84,21 @@ backend/.venv/bin/python backend/manage.py runserver
 
 De backend draait op http://127.0.0.1:8000.
 
+### 5. Demogebruikers
+
+Zet `DEMO_PASSWORD` in `.env` en draai:
+
+```bash
+backend/.venv/bin/python backend/manage.py seed_demo
+```
+
+| Gebruiker | Rol |
+| --- | --- |
+| `medewerker` | Medewerker |
+| `admin` | Admin |
+
+Beide loggen in met het wachtwoord uit `DEMO_PASSWORD`. Het commando mag vaker gedraaid worden; het zet de demogebruikers terug naar hun beginstand.
+
 ## Mappen
 
 | Map | Inhoud |
