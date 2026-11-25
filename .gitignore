@@ -1,0 +1,26 @@
+# Geheimen en lokale instellingen
+.env
+.env.*
+!.env.example
+
+# Python / Django
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.sqlite3
+backend/staticfiles/
+backend/media/
+
+# Node / React / Vite
+node_modules/
+frontend/dist/
+*.log
+
+# Editors en systeem
+.DS_Store
+.vscode/
+.idea/
+
+# AI-assistenten
+.claude/
