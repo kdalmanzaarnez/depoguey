@@ -1,9 +1,13 @@
 from io import StringIO
 from unittest.mock import patch
 
+from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Group
 from django.core.management import call_command
 from django.db import DataError, IntegrityError, transaction
 from django.test import TestCase
+
+from accounts.roles import ADMIN, EMPLOYEE
 
 from .models import Location, Product, Stock
 
@@ -64,3 +68,39 @@ class DemoInventoryTests(TestCase):
         self.assertEqual(Stock.objects.count(), 2)
         stock = headset.stock.get(location__code='A-01')
         self.assertEqual((stock.on_hand, stock.reserved), (8, 2))
+
+
+class ProductListTests(TestCase):
+    url = '/api/products/'
+
+    def test_employee_and_admin_can_read_products_with_available_stock(self):
+        mouse = Product.objects.create(
+            sku='MS-01', name='Muis', category=Product.Category.MOUSE, price=25, is_active=False,
+        )
+        headset = Product.objects.create(
+            sku='HS-01', name='Headset', category=Product.Category.HEADSET, price=49,
+        )
+        Stock.objects.create(product=headset, location=Location.objects.create(code='A-01'), on_hand=10, reserved=3)
+        Stock.objects.create(product=headset, location=Location.objects.create(code='A-02'), on_hand=5, reserved=1)
+
+        for role in (EMPLOYEE, ADMIN):
+            with self.subTest(role=role):
+                user = get_user_model().objects.create_user(username=role)
+                user.groups.add(Group.objects.get(name=role))
+                self.client.force_login(user)
+                response = self.client.get(self.url)
+
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(response.json(), [
+                    {'id': headset.pk, 'sku': 'HS-01', 'name': 'Headset', 'category': 'headset',
+                     'is_active': True, 'available': 11},
+                    {'id': mouse.pk, 'sku': 'MS-01', 'name': 'Muis', 'category': 'mouse',
+                     'is_active': False, 'available': 0},
+                ])
+
+    def test_anonymous_user_is_denied(self):
+        self.assertEqual(self.client.get(self.url).status_code, 403)
+
+    def test_user_without_wms_role_is_denied(self):
+        self.client.force_login(get_user_model().objects.create_user(username='zonder-rol'))
+        self.assertEqual(self.client.get(self.url).status_code, 403)
