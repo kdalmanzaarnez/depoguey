@@ -73,6 +73,11 @@ class DemoInventoryTests(TestCase):
 class ProductListTests(TestCase):
     url = '/api/products/'
 
+    def login_as_employee(self):
+        user = get_user_model().objects.create_user(username='medewerker')
+        user.groups.add(Group.objects.get(name=EMPLOYEE))
+        self.client.force_login(user)
+
     def test_employee_and_admin_can_read_products_with_available_stock(self):
         mouse = Product.objects.create(
             sku='MS-01', name='Muis', category=Product.Category.MOUSE, price=25, is_active=False,
@@ -108,9 +113,7 @@ class ProductListTests(TestCase):
     def test_search_by_partial_name_or_sku(self):
         Product.objects.create(sku='HS-01', name='Stereoheadset', category=Product.Category.HEADSET, price=49)
         Product.objects.create(sku='MS-02', name='Gamingmuis', category=Product.Category.MOUSE, price=25)
-        user = get_user_model().objects.create_user(username='medewerker')
-        user.groups.add(Group.objects.get(name=EMPLOYEE))
-        self.client.force_login(user)
+        self.login_as_employee()
 
         for term, expected_skus in [
             ('HEAD', ['HS-01']),
@@ -122,3 +125,32 @@ class ProductListTests(TestCase):
                 response = self.client.get(self.url, {'search': term})
                 self.assertEqual(response.status_code, 200)
                 self.assertEqual([product['sku'] for product in response.json()], expected_skus)
+
+    def test_filters_by_category_and_status_with_optional_search(self):
+        Product.objects.create(sku='HS-01', name='Gamingheadset', category=Product.Category.HEADSET, price=49)
+        Product.objects.create(
+            sku='HS-02', name='Studioheadset', category=Product.Category.HEADSET, price=59, is_active=False,
+        )
+        Product.objects.create(sku='MS-01', name='Gamingmuis', category=Product.Category.MOUSE, price=25)
+        self.login_as_employee()
+
+        for params, expected_skus in [
+            ({'category': 'headset'}, ['HS-01', 'HS-02']),
+            ({'active': 'true'}, ['HS-01', 'MS-01']),
+            ({'active': 'false'}, ['HS-02']),
+            ({'category': 'headset', 'active': 'true', 'search': 'gaming'}, ['HS-01']),
+            ({'category': 'headset', 'active': 'true', 'search': 'studio'}, []),
+            ({'category': '', 'active': ''}, ['HS-01', 'HS-02', 'MS-01']),
+        ]:
+            with self.subTest(params=params):
+                response = self.client.get(self.url, params)
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual([product['sku'] for product in response.json()], expected_skus)
+
+    def test_invalid_filter_values_return_field_errors(self):
+        self.login_as_employee()
+        for field in ('category', 'active'):
+            with self.subTest(field=field):
+                response = self.client.get(self.url, {field: 'onbekend'})
+                self.assertEqual(response.status_code, 400)
+                self.assertIn(field, response.json())
