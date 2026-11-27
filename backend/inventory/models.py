@@ -41,3 +41,26 @@ class Location(models.Model):
 
     def __str__(self):
         return self.code
+
+
+class Stock(models.Model):
+    product = models.ForeignKey(Product, on_delete=models.PROTECT, related_name='stock')
+    location = models.ForeignKey(Location, on_delete=models.PROTECT)
+    on_hand = models.PositiveIntegerField(default=0)
+    reserved = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=['product', 'location'],
+                name='stock_unique_product_location',
+            ),
+            models.CheckConstraint(
+                condition=models.Q(reserved__lte=models.F('on_hand')),
+                name='stock_reserved_lte_on_hand',
+            ),
+        ]
+
+    @property
+    def available(self):
+        return self.on_hand - self.reserved
