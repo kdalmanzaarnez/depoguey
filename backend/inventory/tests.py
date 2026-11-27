@@ -154,3 +154,53 @@ class ProductListTests(TestCase):
                 response = self.client.get(self.url, {field: 'onbekend'})
                 self.assertEqual(response.status_code, 400)
                 self.assertIn(field, response.json())
+
+
+class ProductDetailTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.product = Product.objects.create(
+            sku='HS-01', name='Stereoheadset', category=Product.Category.HEADSET,
+            description='Met microfoon', compatibility='PC, PS5', price='49.95',
+        )
+        cls.url = f'/api/products/{cls.product.pk}/'
+
+    def login_with_role(self, role):
+        user = get_user_model().objects.create_user(username=role)
+        user.groups.add(Group.objects.get(name=role))
+        self.client.force_login(user)
+
+    def test_employee_and_admin_can_read_product_with_stock_per_location(self):
+        Stock.objects.create(product=self.product, location=Location.objects.create(code='B-02'), on_hand=5, reserved=1)
+        Stock.objects.create(product=self.product, location=Location.objects.create(code='A-01'), on_hand=10, reserved=3)
+
+        for role in (EMPLOYEE, ADMIN):
+            with self.subTest(role=role):
+                self.login_with_role(role)
+                response = self.client.get(self.url)
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(response.json(), {
+                    'id': self.product.pk, 'sku': 'HS-01', 'name': 'Stereoheadset', 'category': 'headset',
+                    'is_active': True, 'description': 'Met microfoon', 'compatibility': 'PC, PS5',
+                    'price': '49.95', 'available': 11,
+                    'stock': [
+                        {'location_code': 'A-01', 'on_hand': 10, 'reserved': 3, 'available': 7},
+                        {'location_code': 'B-02', 'on_hand': 5, 'reserved': 1, 'available': 4},
+                    ],
+                })
+
+    def test_product_without_stock_returns_zero_and_empty_list(self):
+        self.login_with_role(EMPLOYEE)
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['available'], 0)
+        self.assertEqual(response.json()['stock'], [])
+
+    def test_unknown_product_returns_not_found(self):
+        self.login_with_role(EMPLOYEE)
+        self.assertEqual(self.client.get(f'/api/products/{self.product.pk + 1}/').status_code, 404)
+
+    def test_detail_requires_wms_role(self):
+        self.assertEqual(self.client.get(self.url).status_code, 403)
+        self.client.force_login(get_user_model().objects.create_user(username='zonder-rol'))
+        self.assertEqual(self.client.get(self.url).status_code, 403)
