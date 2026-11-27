@@ -33,3 +33,11 @@ class Product(models.Model):
 
     def __str__(self):
         return f'{self.sku} · {self.name}'
+
+
+class Location(models.Model):
+    code = models.CharField(max_length=32, unique=True)
+    description = models.CharField(max_length=200, blank=True)
+
+    def __str__(self):
+        return self.code
