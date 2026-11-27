@@ -104,3 +104,21 @@ class ProductListTests(TestCase):
     def test_user_without_wms_role_is_denied(self):
         self.client.force_login(get_user_model().objects.create_user(username='zonder-rol'))
         self.assertEqual(self.client.get(self.url).status_code, 403)
+
+    def test_search_by_partial_name_or_sku(self):
+        Product.objects.create(sku='HS-01', name='Stereoheadset', category=Product.Category.HEADSET, price=49)
+        Product.objects.create(sku='MS-02', name='Gamingmuis', category=Product.Category.MOUSE, price=25)
+        user = get_user_model().objects.create_user(username='medewerker')
+        user.groups.add(Group.objects.get(name=EMPLOYEE))
+        self.client.force_login(user)
+
+        for term, expected_skus in [
+            ('HEAD', ['HS-01']),
+            ('ms-0', ['MS-02']),
+            ('toetsenbord', []),
+            ('', ['HS-01', 'MS-02']),
+        ]:
+            with self.subTest(term=term):
+                response = self.client.get(self.url, {'search': term})
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual([product['sku'] for product in response.json()], expected_skus)
