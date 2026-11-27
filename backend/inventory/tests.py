@@ -1,3 +1,7 @@
+from io import StringIO
+from unittest.mock import patch
+
+from django.core.management import call_command
 from django.db import DataError, IntegrityError, transaction
 from django.test import TestCase
 
@@ -41,3 +45,22 @@ class StockTests(TestCase):
                     Stock.objects.create(
                         product=self.product, location=self.location, on_hand=on_hand, reserved=reserved,
                     )
+
+
+class DemoInventoryTests(TestCase):
+    @patch.dict('os.environ', {'DEMO_PASSWORD': 'test-wachtwoord-123'})
+    def test_seed_demo_creates_stock_once(self):
+        call_command('seed_demo', stdout=StringIO())
+
+        headset = Product.objects.get(sku='DEMO-HS-01', is_active=True)
+        self.assertTrue(Product.objects.filter(sku='DEMO-MS-01', is_active=False).exists())
+        self.assertEqual(dict(headset.stock.values_list('location__code', 'on_hand')), {'A-01': 10, 'A-02': 5})
+
+        headset.stock.filter(location__code='A-01').update(on_hand=8, reserved=2)
+        call_command('seed_demo', stdout=StringIO())
+
+        self.assertEqual(Product.objects.count(), 2)
+        self.assertEqual(Location.objects.count(), 2)
+        self.assertEqual(Stock.objects.count(), 2)
+        stock = headset.stock.get(location__code='A-01')
+        self.assertEqual((stock.on_hand, stock.reserved), (8, 2))
